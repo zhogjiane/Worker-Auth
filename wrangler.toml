@@ -10,7 +10,7 @@ JWT_SECRET = "7fc7e04f01a918dbce838b18aa414552afb5f9325336dbc651969cd6e2386392"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "auth_database"
+database_name = "worker-auth-db"
 database_id = "6c152664-19cf-4ae2-a595-b2ec28891306"
 
 [[kv_namespaces]]
