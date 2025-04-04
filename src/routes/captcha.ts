@@ -69,13 +69,12 @@ captcha.get('/generate', async (c) => {
     // 存储验证码，设置5分钟过期
     await captchaStore.set(key, captchaText, 300)
     
-    // 返回验证码标识
+    // 返回验证码标识和验证码内容
     return c.json({
       success: true,
       data: {
         key,
-        // 注意：实际生产环境中不应该返回验证码，这里仅用于测试
-        // captcha: captchaText
+        captcha: captchaText
       }
     })
   } catch (error) {

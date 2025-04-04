@@ -412,6 +412,227 @@ wrangler secret put KV_NAMESPACE
 - **部署平台**: Cloudflare Pages
 - **域名**: `www.litesmile.xyz`
 
+### 使用 Alova.js 集成
+
+#### 1. 安装依赖
+
+```bash
+# 安装 alova 和 alova 适配器
+pnpm add alova @alova/adapter-axios
+```
+
+#### 2. 创建 API 实例
+
+```typescript
+// src/api/instance.ts
+import { createAlova } from 'alova'
+import { axiosRequestAdapter } from '@alova/adapter-axios'
+import axios from 'axios'
+
+// 创建 axios 实例
+const axiosInstance = axios.create({
+  baseURL: 'https://api.litesmile.xyz/api',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 创建 alova 实例
+export const alovaInstance = createAlova({
+  baseURL: 'https://api.litesmile.xyz/api',
+  requestAdapter: axiosRequestAdapter(),
+  beforeRequest: (config) => {
+    // 添加 token
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  responded: {
+    // 响应拦截器
+    onSuccess: (response) => {
+      return response.data
+    },
+    onError: (error) => {
+      // 处理错误
+      if (error.response?.status === 401) {
+        // token 过期，尝试刷新
+        return handleTokenRefresh()
+      }
+      throw error
+    }
+  }
+})
+
+// 处理 token 刷新
+async function handleTokenRefresh() {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken')
+    if (!refreshToken) {
+      throw new Error('No refresh token')
+    }
+
+    const { data } = await axiosInstance.post('/auth/refresh', {
+      refreshToken
+    })
+
+    localStorage.setItem('accessToken', data.accessToken)
+    localStorage.setItem('refreshToken', data.refreshToken)
+
+    // 重试原请求
+    return alovaInstance.Get('/auth/refresh').send()
+  } catch (error) {
+    // 刷新失败，清除 token 并跳转到登录页
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+    window.location.href = '/login'
+    throw error
+  }
+}
+```
+
+#### 3. 创建 API 方法
+
+```typescript
+// src/api/auth.ts
+import { alovaInstance } from './instance'
+
+// 验证码相关
+export const captchaApi = {
+  // 生成验证码
+  generate: () => alovaInstance.Get('/captcha/generate'),
+  
+  // 验证验证码
+  verify: (key: string, captcha: string) => 
+    alovaInstance.Post('/captcha/verify', { key, captcha })
+}
+
+// 认证相关
+export const authApi = {
+  // 用户注册
+  register: (data: {
+    email: string
+    password: string
+    name: string
+    captchaKey: string
+    captcha: string
+  }) => alovaInstance.Post('/auth/register', data),
+
+  // 用户登录
+  login: (data: {
+    email: string
+    password: string
+    captchaKey: string
+    captcha: string
+  }) => alovaInstance.Post('/auth/login', data),
+
+  // 刷新令牌
+  refresh: (data: { refreshToken: string }) => 
+    alovaInstance.Post('/auth/refresh', data),
+
+  // 用户登出
+  logout: () => alovaInstance.Post('/auth/logout')
+}
+```
+
+#### 4. 在组件中使用
+
+```typescript
+// src/components/LoginForm.tsx
+import { useRequest } from 'alova'
+import { captchaApi, authApi } from '../api/auth'
+
+export function LoginForm() {
+  // 获取验证码
+  const { data: captchaData, send: getCaptcha } = useRequest(captchaApi.generate)
+  
+  // 登录请求
+  const { loading, send: login } = useRequest(authApi.login, {
+    immediate: false
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    try {
+      // 1. 获取验证码
+      const captchaResponse = await getCaptcha()
+      const captchaKey = captchaResponse.data.key
+      
+      // 2. 显示验证码输入界面，获取用户输入的验证码
+      const userCaptcha = "abcd" // 实际应从表单获取
+      
+      // 3. 验证验证码
+      const verifyResponse = await captchaApi.verify(captchaKey, userCaptcha)
+      if (!verifyResponse.data.valid) {
+        throw new Error('验证码错误')
+      }
+      
+      // 4. 登录用户
+      const loginResponse = await login({
+        email: "user@example.com",
+        password: "password",
+        captchaKey,
+        captcha: userCaptcha
+      })
+      
+      // 5. 保存 token
+      localStorage.setItem('accessToken', loginResponse.data.accessToken)
+      localStorage.setItem('refreshToken', loginResponse.data.refreshToken)
+      
+      // 6. 跳转到首页
+      window.location.href = '/'
+    } catch (error) {
+      console.error('登录失败:', error)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* 表单内容 */}
+    </form>
+  )
+}
+```
+
+#### 5. 全局状态管理
+
+```typescript
+// src/stores/auth.ts
+import { create } from 'zustand'
+import { authApi } from '../api/auth'
+
+interface AuthState {
+  user: any | null
+  isAuthenticated: boolean
+  login: (data: any) => Promise<void>
+  logout: () => Promise<void>
+}
+
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  isAuthenticated: false,
+  
+  login: async (data) => {
+    const response = await authApi.login(data)
+    set({
+      user: response.data.user,
+      isAuthenticated: true
+    })
+  },
+  
+  logout: async () => {
+    await authApi.logout()
+    set({
+      user: null,
+      isAuthenticated: false
+    })
+  }
+}))
+```
+
 ### 域名配置
 
 为了使前端和后端服务能够正常通信，需要进行以下配置：
@@ -434,255 +655,10 @@ app.use('*', cors({
   origin: 'https://www.litesmile.xyz',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
-  exposeHeaders: ['Content-Length', 'X-Requested-With'],
-  maxAge: 600,
-  credentials: true,
+  exposeHeaders: ['Content-Length', 'X-Request-Id'],
+  maxAge: 3600,
+  credentials: true
 }))
-```
-
-### 前端集成示例
-
-#### 1. 环境配置
-
-在前端项目中创建环境配置文件 `.env`:
-
-```
-VITE_API_BASE_URL=https://api.litesmile.xyz/api
-```
-
-#### 2. API 客户端封装
-
-创建一个 API 客户端文件 `src/api/auth.ts`:
-
-```typescript
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-// 创建 axios 实例
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// 请求拦截器，添加 token
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 响应拦截器，处理 token 过期
-apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // 如果是 401 错误且不是刷新 token 的请求
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        // 尝试刷新 token
-        const refreshToken = localStorage.getItem('refreshToken');
-        const response = await apiClient.post('/auth/refresh', { refreshToken });
-        
-        // 更新 token
-        localStorage.setItem('accessToken', response.data.data.accessToken);
-        localStorage.setItem('refreshToken', response.data.data.refreshToken);
-        
-        // 重试原始请求
-        originalRequest.headers.Authorization = `Bearer ${response.data.data.accessToken}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        // 刷新 token 失败，清除 token 并跳转到登录页
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-// 验证码相关 API
-export const captchaApi = {
-  // 生成验证码
-  generate: async () => {
-    const response = await apiClient.get('/captcha/generate');
-    return response.data;
-  },
-  
-  // 验证验证码
-  verify: async (key: string, captcha: string) => {
-    const response = await apiClient.post('/captcha/verify', { key, captcha });
-    return response.data;
-  }
-};
-
-// 认证相关 API
-export const authApi = {
-  // 用户注册
-  register: async (data: {
-    email: string;
-    password: string;
-    name?: string;
-    bio?: string;
-    captchaKey: string;
-    captcha: string;
-  }) => {
-    const response = await apiClient.post('/auth/register', data);
-    return response.data;
-  },
-  
-  // 用户登录
-  login: async (data: {
-    email: string;
-    password: string;
-    captchaKey: string;
-    captcha: string;
-  }) => {
-    const response = await apiClient.post('/auth/login', data);
-    return response.data;
-  },
-  
-  // 刷新令牌
-  refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post('/auth/refresh', { refreshToken });
-    return response.data;
-  },
-  
-  // 用户登出
-  logout: async () => {
-    const response = await apiClient.post('/auth/logout');
-    return response.data;
-  }
-};
-```
-
-#### 3. 使用示例
-
-##### 3.1 注册流程
-
-```typescript
-import { captchaApi, authApi } from '../api/auth';
-
-// 注册流程
-async function handleRegister(email: string, password: string, name: string) {
-  try {
-    // 1. 获取验证码
-    const captchaResponse = await captchaApi.generate();
-    const captchaKey = captchaResponse.data.key;
-    
-    // 2. 显示验证码输入界面，获取用户输入的验证码
-    // 假设用户输入了 "abcd"
-    const userCaptcha = "abcd";
-    
-    // 3. 验证验证码
-    const verifyResponse = await captchaApi.verify(captchaKey, userCaptcha);
-    if (!verifyResponse.data.valid) {
-      throw new Error('验证码错误');
-    }
-    
-    // 4. 注册用户
-    const registerResponse = await authApi.register({
-      email,
-      password,
-      name,
-      captchaKey,
-      captcha: userCaptcha
-    });
-    
-    // 5. 保存 token
-    localStorage.setItem('accessToken', registerResponse.data.accessToken);
-    localStorage.setItem('refreshToken', registerResponse.data.refreshToken);
-    
-    // 6. 跳转到首页
-    window.location.href = '/';
-    
-    return registerResponse.data.user;
-  } catch (error) {
-    console.error('注册失败:', error);
-    throw error;
-  }
-}
-```
-
-##### 3.2 登录流程
-
-```typescript
-// 登录流程
-async function handleLogin(email: string, password: string) {
-  try {
-    // 1. 获取验证码
-    const captchaResponse = await captchaApi.generate();
-    const captchaKey = captchaResponse.data.key;
-    
-    // 2. 显示验证码输入界面，获取用户输入的验证码
-    // 假设用户输入了 "abcd"
-    const userCaptcha = "abcd";
-    
-    // 3. 验证验证码
-    const verifyResponse = await captchaApi.verify(captchaKey, userCaptcha);
-    if (!verifyResponse.data.valid) {
-      throw new Error('验证码错误');
-    }
-    
-    // 4. 登录用户
-    const loginResponse = await authApi.login({
-      email,
-      password,
-      captchaKey,
-      captcha: userCaptcha
-    });
-    
-    // 5. 保存 token
-    localStorage.setItem('accessToken', loginResponse.data.accessToken);
-    localStorage.setItem('refreshToken', loginResponse.data.refreshToken);
-    
-    // 6. 跳转到首页
-    window.location.href = '/';
-    
-    return loginResponse.data.user;
-  } catch (error) {
-    console.error('登录失败:', error);
-    throw error;
-  }
-}
-```
-
-##### 3.3 登出流程
-
-```typescript
-// 登出流程
-async function handleLogout() {
-  try {
-    await authApi.logout();
-    
-    // 清除 token
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    
-    // 跳转到登录页
-    window.location.href = '/login';
-  } catch (error) {
-    console.error('登出失败:', error);
-    throw error;
-  }
-}
 ```
 
 ## 项目结构

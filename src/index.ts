@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { Env } from './types/env'
 import { errorHandler } from './middleware/error.middleware'
 import { corsMiddleware } from './middleware/security.middleware'
+import { databaseInitMiddleware } from './middleware/database.middleware'
 import auth from './routes/auth'
 import captcha from './routes/captcha'
 
@@ -14,6 +15,9 @@ app.use('*', errorHandler)
 
 // 配置 CORS
 app.use('*', (c, next) => corsMiddleware(c.env)(c, next))
+
+// 添加数据库初始化中间件
+app.use('*', databaseInitMiddleware)
 
 // 健康检查
 app.get('/', (c) => {
