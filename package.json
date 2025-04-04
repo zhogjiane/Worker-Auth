@@ -1,0 +1,30 @@
+{
+  "name": "worker-auth",
+  "version": "1.0.0",
+  "description": "Authentication service built with Hono.js on Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "hono",
+    "authentication"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250404.0",
+    "hono": "^4.7.5",
+    "wrangler": "^4.7.0",
+    "zod": "^3.24.2"
+  },
+  "dependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.14.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
