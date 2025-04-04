@@ -6,7 +6,15 @@ compatibility_date = "2024-01-01"
 command = "pnpm build" 
 
 [vars]
-JWT_SECRET = "7fc7e04f01a918dbce838b18aa414552afb5f9325336dbc651969cd6e2386392"
+# API 配置
+API_VERSION = "v1"
+MAX_REQUESTS_PER_MINUTE = "60"
+
+# 安全配置
+ALLOWED_ORIGINS = "https://www.litesmile.xyz,http://localhost:3000,http://localhost:5173"
+CAPTCHA_EXPIRY = "300"  # 验证码有效期（秒）
+IP_BAN_DURATION = "3600"  # IP 封禁时长（秒）
+MAX_FAILED_ATTEMPTS = "5"  # 最大失败尝试次数
 
 [[d1_databases]]
 binding = "DB"

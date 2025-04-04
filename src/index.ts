@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Env } from './types/env'
 import { errorHandler } from './middleware/error.middleware'
+import { corsMiddleware } from './middleware/security.middleware'
 import auth from './routes/auth'
 import captcha from './routes/captcha'
 
@@ -12,14 +13,7 @@ const app = new Hono<{ Bindings: Env }>()
 app.use('*', errorHandler)
 
 // 配置 CORS
-app.use('*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  exposeHeaders: ['Content-Length', 'X-Requested-With'],
-  maxAge: 600,
-  credentials: true,
-}))
+app.use('*', (c, next) => corsMiddleware(c.env)(c, next))
 
 // 健康检查
 app.get('/', (c) => {

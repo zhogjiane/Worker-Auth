@@ -1,30 +1,32 @@
 {
   "name": "worker-auth",
   "version": "1.0.0",
-  "description": "Authentication service built with Hono.js on Cloudflare Workers",
+  "description": "Authentication service built with Cloudflare Workers",
   "main": "src/index.ts",
   "scripts": {
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=browser",
     "dev": "wrangler dev",
-    "build": "tsc",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "cloudflare",
     "workers",
-    "hono",
-    "authentication"
+    "authentication",
+    "d1",
+    "kv"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Your Name",
+  "license": "MIT",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250404.0",
-    "hono": "^4.7.5",
-    "wrangler": "^4.7.0",
-    "zod": "^3.24.2"
+    "@cloudflare/workers-types": "^4.0.0",
+    "@types/node": "^22.14.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@types/jsonwebtoken": "^9.0.9",
-    "@types/node": "^22.14.0",
-    "jsonwebtoken": "^9.0.2"
+    "hono": "^4.0.0",
+    "jose": "^6.0.10",
+    "zod": "^3.0.0"
   }
 }

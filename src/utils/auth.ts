@@ -1,65 +1,133 @@
-import { randomBytes, scrypt } from 'crypto'
-import { sign, verify } from 'jsonwebtoken'
-import { User, AuthResponse, TokenPayload } from '../types/auth'
+import * as jose from 'jose'
 import { Env } from '../types/env'
 
-// 密码加密
+/**
+ * 生成随机盐值
+ * @returns 16字节的随机盐值
+ */
+async function generateSalt(): Promise<string> {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * 使用 PBKDF2 进行密码哈希
+ * @param password 原始密码
+ * @returns 哈希后的密码字符串 (格式: salt:hash)
+ */
 export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString('hex')
-  const key = await new Promise<Buffer>((resolve, reject) => {
-    scrypt(password, salt, 64, (err, derivedKey) => {
-      if (err) reject(err)
-      resolve(derivedKey)
-    })
-  })
-  return `${salt}:${key.toString('hex')}`
-}
-
-// 验证密码
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const [salt, key] = hash.split(':')
-  const keyBuffer = await new Promise<Buffer>((resolve, reject) => {
-    scrypt(password, salt, 64, (err, derivedKey) => {
-      if (err) reject(err)
-      resolve(derivedKey)
-    })
-  })
-  return key === keyBuffer.toString('hex')
-}
-
-// 生成 JWT 令牌
-export function generateTokens(user: User, env: Env): AuthResponse {
-  const accessToken = sign(
-    { userId: user.id, email: user.email },
-    env.JWT_SECRET,
-    { expiresIn: '15m' }
+  const salt = await generateSalt()
+  const encoder = new TextEncoder()
+  const passwordData = encoder.encode(password)
+  const saltData = encoder.encode(salt)
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    passwordData,
+    'PBKDF2',
+    false,
+    ['deriveBits']
   )
-
-  const refreshToken = sign(
-    { userId: user.id, email: user.email },
-    env.JWT_SECRET,
-    { expiresIn: '7d' }
+  
+  const hash = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltData,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    key,
+    256
   )
-
-  return {
-    success: true,
-    data: {
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        bio: user.bio,
-        role: user.role
-      }
-    }
-  }
+  
+  const hashArray = Array.from(new Uint8Array(hash))
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  
+  return `${salt}:${hashHex}`
 }
 
-// 验证 JWT 令牌
-export function verifyToken(token: string, env: Env): TokenPayload {
-  return verify(token, env.JWT_SECRET) as TokenPayload
+/**
+ * 验证密码
+ * @param password 原始密码
+ * @param hashedPassword 哈希后的密码字符串
+ * @returns 密码是否匹配
+ */
+export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+  const [salt, hash] = hashedPassword.split(':')
+  const encoder = new TextEncoder()
+  const passwordData = encoder.encode(password)
+  const saltData = encoder.encode(salt)
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    passwordData,
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  )
+  
+  const newHash = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltData,
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    key,
+    256
+  )
+  
+  const newHashArray = Array.from(new Uint8Array(newHash))
+  const newHashHex = newHashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  
+  return hash === newHashHex
+}
+
+/**
+ * 生成访问令牌
+ * @param userId 用户ID
+ * @param env 环境变量
+ * @returns 访问令牌
+ */
+export async function generateAccessToken(userId: number, env: Env): Promise<string> {
+  const secret = new TextEncoder().encode(env.JWT_SECRET)
+  const alg = 'HS256'
+
+  return new jose.SignJWT({ userId })
+    .setProtectedHeader({ alg })
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(secret)
+}
+
+/**
+ * 生成刷新令牌
+ * @param userId 用户ID
+ * @param env 环境变量
+ * @returns 刷新令牌
+ */
+export async function generateRefreshToken(userId: number, env: Env): Promise<string> {
+  const secret = new TextEncoder().encode(env.JWT_SECRET)
+  const alg = 'HS256'
+
+  return new jose.SignJWT({ userId })
+    .setProtectedHeader({ alg })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(secret)
+}
+
+/**
+ * 验证令牌
+ * @param token JWT令牌
+ * @param env 环境变量
+ * @returns 解码后的令牌数据
+ */
+export async function verifyToken(token: string, env: Env): Promise<jose.JWTPayload> {
+  const secret = new TextEncoder().encode(env.JWT_SECRET)
+  const { payload } = await jose.jwtVerify(token, secret)
+  return payload
 }
 
 // 生成随机验证码

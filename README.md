@@ -19,8 +19,8 @@ Worker-Auth 是一个专为现代 Web 应用设计的认证服务，具有以下
 - **缓存**: Cloudflare KV
 - **Web 框架**: Hono.js
 - **验证库**: Zod
-- **JWT 库**: jsonwebtoken
-- **开发工具**: Wrangler, TypeScript
+- **JWT 库**: jose
+- **开发工具**: Wrangler, TypeScript, esbuild
 
 ## 系统架构
 
@@ -283,9 +283,7 @@ cd worker-auth
 2. 安装依赖
 
 ```bash
-npm install
-# 或
-bun install
+pnpm install
 ```
 
 ### 配置
@@ -331,14 +329,73 @@ wrangler d1 execute worker-auth-db --file=./schema.sql
 ### 本地开发
 
 ```bash
-wrangler dev
+pnpm dev
 ```
 
-### 部署
+### 构建和部署
 
 ```bash
-wrangler deploy
+pnpm build
+
+pnpm deploy
 ```
+
+### 环境变量配置
+
+在部署之前，需要在 Cloudflare Workers 中配置以下变量：
+
+#### 1. 环境变量（Variables）
+在 `wrangler.toml` 中配置：
+
+```toml
+[vars]
+# API 配置
+API_VERSION = "v1"
+MAX_REQUESTS_PER_MINUTE = "60"
+
+# 安全配置
+ALLOWED_ORIGINS = "https://www.litesmile.xyz"
+CAPTCHA_EXPIRY = "300"  # 验证码有效期（秒）
+IP_BAN_DURATION = "3600"  # IP 封禁时长（秒）
+MAX_FAILED_ATTEMPTS = "5"  # 最大失败尝试次数
+```
+
+#### 2. 密钥（Secrets）
+使用 wrangler CLI 设置：
+
+```bash
+# JWT 签名密钥
+wrangler secret put JWT_SECRET
+
+# 数据库连接信息
+wrangler secret put DATABASE_URL
+
+# KV 命名空间 ID
+wrangler secret put KV_NAMESPACE
+```
+
+#### 3. 变量使用建议
+
+1. **必须使用密钥（Secrets）的信息**：
+   - JWT 签名密钥（JWT_SECRET）
+   - 数据库连接字符串（DATABASE_URL）
+   - API 密钥和令牌
+   - 其他敏感凭证
+
+2. **可以使用环境变量（Variables）的信息**：
+   - API 版本号
+   - 请求限制配置
+   - 允许的域名列表
+   - 功能开关
+   - 超时设置
+   - 其他非敏感配置
+
+3. **最佳实践**：
+   - 定期轮换密钥
+   - 使用强密码生成器生成密钥
+   - 限制密钥的访问权限
+   - 在代码中通过环境变量引用密钥
+   - 使用 TypeScript 类型确保类型安全
 
 ## 前端集成指南
 

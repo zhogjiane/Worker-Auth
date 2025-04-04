@@ -1,15 +1,6 @@
 import { MiddlewareHandler } from 'hono'
 import { cors } from 'hono/cors'
-
-/**
- * 允许的域名列表
- */
-const ALLOWED_ORIGINS = [
-  'https://www.litesmile.xyz',
-  // 如果需要本地开发，可以添加本地域名
-  'http://localhost:3000',
-  'http://localhost:5173'
-]
+import { Env } from '../types/env'
 
 /**
  * 安全相关的 HTTP 头
@@ -27,10 +18,12 @@ const SECURITY_HEADERS = {
 /**
  * CORS 中间件配置
  */
-export const corsMiddleware = cors({
+export const corsMiddleware = (env: Env) => cors({
   origin: (origin) => {
+    // 从环境变量获取允许的域名列表
+    const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
     // 如果在允许的域名列表中，则允许访问
-    return ALLOWED_ORIGINS.includes(origin) ? origin : ''
+    return allowedOrigins.includes(origin) ? origin : ''
   },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],

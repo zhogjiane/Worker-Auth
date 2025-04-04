@@ -17,5 +17,13 @@ export interface Env {
   // JWT 密钥
   JWT_SECRET: string
   
-  // 其他环境变量...
+  // API 配置
+  API_VERSION: string
+  MAX_REQUESTS_PER_MINUTE: string
+  
+  // 安全配置
+  ALLOWED_ORIGINS: string
+  CAPTCHA_EXPIRY: string
+  IP_BAN_DURATION: string
+  MAX_FAILED_ATTEMPTS: string
 } 
