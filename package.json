@@ -7,7 +7,10 @@
     "build": "tsc --noEmit && esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=browser",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "db:push": "wrangler d1 execute worker-auth-db --local --file=./migrations/0000_yielding_lizard.sql",
+    "db:studio": "drizzle-kit studio --port 3333"
   },
   "keywords": [
     "cloudflare",
@@ -21,10 +24,12 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.0.0",
     "@types/node": "^22.14.0",
+    "drizzle-kit": "^0.30.6",
     "esbuild": "^0.20.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "drizzle-orm": "^0.41.0",
     "hono": "^4.0.0",
     "jose": "^6.0.10",
     "zod": "^3.0.0"

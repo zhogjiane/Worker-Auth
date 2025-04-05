@@ -1,130 +1,100 @@
 import { Hono } from 'hono'
-import { z } from 'zod'
-import { registerSchema, loginSchema, refreshTokenSchema } from '../types/auth'
-import { ValidationError } from '../errors/error.types'
-import { Env } from '../types/env'
 import { ServiceFactory } from '../services/service.factory'
+import { BusinessError } from '../errors/error.types'
+import { loginSchema, registerSchema, refreshTokenSchema } from '../types/auth'
+import { ResponseUtil } from '../utils/response.util'
+import { createDb } from '../db'
+import type { DrizzleD1Database } from 'drizzle-orm/d1'
+import type { DbSchema } from '../db'
+import type { UserCreateInput } from '../types/user'
 
-// 创建路由实例
-const auth = new Hono<{ Bindings: Env }>()
+const auth = new Hono()
 
-/**
- * 用户注册
- * POST /api/auth/register
- */
+// 获取服务实例
+const getAuthService = (c: any) => {
+  // 初始化数据库连接
+  const drizzleDb: DrizzleD1Database<DbSchema> = createDb(c.env.DB)
+  // 获取服务工厂实例
+  const serviceFactory = ServiceFactory.getInstance(c.env, drizzleDb)
+  return serviceFactory.getAuthService()
+}
+
+// 注册路由
 auth.post('/register', async (c) => {
   try {
-    // 获取客户端IP地址
-    const ipAddress = c.req.header('CF-Connecting-IP') ?? 
-                     c.req.header('X-Forwarded-For') ?? 
-                     c.req.header('X-Real-IP') ?? 
-                     'unknown'
+    // 验证请求数据
+    const data = await c.req.json()
+    const validatedData = registerSchema.parse(data)
     
-    // 解析请求体
-    const body = await c.req.json()
-    
-    // 验证请求参数
-    const data = registerSchema.parse(body)
-    
-    // 创建服务工厂并获取认证服务实例
-    const serviceFactory = new ServiceFactory(c.env)
-    const authService = serviceFactory.getAuthService()
-    
-    // 调用注册服务
-    const result = await authService.register(data, ipAddress)
-    
-    return c.json(result)
-  } catch (error) {
-    // 参数验证错误
-    if (error instanceof z.ZodError) {
-      throw new ValidationError('参数验证失败', error.errors)
+    // 转换为 UserCreateInput 格式
+    const userInput: UserCreateInput = {
+      email: validatedData.email,
+      username: validatedData.email.split('@')[0], // 使用邮箱前缀作为用户名
+      password: validatedData.password
     }
-    throw error
+    
+    // 调用服务
+    const result = await getAuthService(c).register(userInput)
+    
+    return ResponseUtil.success(c, result)
+  } catch (error) {
+    if (error instanceof BusinessError) {
+      return ResponseUtil.error(c, error.message, error.code)
+    }
+    return ResponseUtil.error(c, '注册失败', 'REGISTRATION_FAILED')
   }
 })
 
-/**
- * 用户登录
- * POST /api/auth/login
- */
+// 登录路由
 auth.post('/login', async (c) => {
   try {
-    // 获取客户端IP地址
-    const ipAddress = c.req.header('CF-Connecting-IP') ?? 
-                     c.req.header('X-Forwarded-For') ?? 
-                     c.req.header('X-Real-IP') ?? 
-                     'unknown'
+    // 验证请求数据
+    const data = await c.req.json()
+    const validatedData = loginSchema.parse(data)
     
-    // 解析请求体
-    const body = await c.req.json()
+    // 调用服务
+    const result = await getAuthService(c).login(validatedData)
     
-    // 验证请求参数
-    const data = loginSchema.parse(body)
-    
-    // 创建服务工厂并获取认证服务实例
-    const serviceFactory = new ServiceFactory(c.env)
-    const authService = serviceFactory.getAuthService()
-    
-    // 调用登录服务
-    const result = await authService.login(data, ipAddress)
-    
-    return c.json(result)
+    return ResponseUtil.success(c, result)
   } catch (error) {
-    // 参数验证错误
-    if (error instanceof z.ZodError) {
-      throw new ValidationError('参数验证失败', error.errors)
+    if (error instanceof BusinessError) {
+      return ResponseUtil.error(c, error.message, error.code)
     }
-    throw error
+    return ResponseUtil.error(c, '登录失败', 'LOGIN_FAILED')
   }
 })
 
-/**
- * 刷新访问令牌
- * POST /api/auth/refresh
- */
+// 刷新令牌路由
 auth.post('/refresh', async (c) => {
   try {
-    // 解析请求体
-    const body = await c.req.json()
+    // 验证请求数据
+    const data = await c.req.json()
+    const validatedData = refreshTokenSchema.parse(data)
     
-    // 验证请求参数
-    const data = refreshTokenSchema.parse(body)
+    // 调用服务
+    const result = await getAuthService(c).refreshToken(validatedData.refreshToken)
     
-    // 创建服务工厂并获取认证服务实例
-    const serviceFactory = new ServiceFactory(c.env)
-    const authService = serviceFactory.getAuthService()
-    
-    // 调用刷新令牌服务
-    const result = await authService.refreshToken(data.refreshToken)
-    
-    return c.json(result)
+    return ResponseUtil.success(c, result)
   } catch (error) {
-    // 参数验证错误
-    if (error instanceof z.ZodError) {
-      throw new ValidationError('参数验证失败', error.errors)
+    if (error instanceof BusinessError) {
+      return ResponseUtil.error(c, error.message, error.code)
     }
-    throw error
+    return ResponseUtil.error(c, '刷新令牌失败', 'REFRESH_TOKEN_FAILED')
   }
 })
 
-/**
- * 用户登出
- * POST /api/auth/logout
- */
+// 登出路由
 auth.post('/logout', async (c) => {
   try {
-    // 创建服务工厂并获取认证服务实例
-    const serviceFactory = new ServiceFactory(c.env)
-    const authService = serviceFactory.getAuthService()
+    // 调用服务
+    const result = await getAuthService(c).logout()
     
-    // 调用登出服务
-    const result = await authService.logout()
-    
-    return c.json(result)
+    return ResponseUtil.success(c, result)
   } catch (error) {
-    // 记录错误并重新抛出
-    console.error('登出失败:', error)
-    throw error
+    if (error instanceof BusinessError) {
+      return ResponseUtil.error(c, error.message, error.code)
+    }
+    return ResponseUtil.error(c, '登出失败', 'LOGOUT_FAILED')
   }
 })
 

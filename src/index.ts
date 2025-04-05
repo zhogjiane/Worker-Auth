@@ -1,44 +1,49 @@
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { Env } from './types/env'
+import { createAuthRoutes } from './routes/auth.routes'
+import { createArticleRoutes } from './routes/article.routes'
+import { createCommentRoutes } from './routes/comment.routes'
 import { errorHandler } from './middleware/error.middleware'
-import { corsMiddleware } from './middleware/security.middleware'
+import { corsMiddleware, securityHeadersMiddleware } from './middleware/security.middleware'
 import { databaseInitMiddleware } from './middleware/database.middleware'
-import auth from './routes/auth'
-import captcha from './routes/captcha'
+import { createDb } from './db'
 
-// 创建应用实例
+// 创建 Hono 应用实例
 const app = new Hono<{ Bindings: Env }>()
 
-// 添加错误处理中间件
+// 注册全局中间件
 app.use('*', errorHandler)
-
-// 配置 CORS
 app.use('*', (c, next) => corsMiddleware(c.env)(c, next))
-
-// 添加数据库初始化中间件
+app.use('*', securityHeadersMiddleware)
 app.use('*', databaseInitMiddleware)
 
-// 健康检查
-app.get('/', (c) => {
-  return c.json({
-    status: 'ok',
-    message: 'API is running'
-  })
+// API 路由
+app.use('/api/auth/*', async (c) => {
+  const router = createAuthRoutes(c.env)
+  return router.fetch(c.req.raw, c.env)
 })
 
-// 注册路由
-app.route('/api/auth', auth)
-app.route('/api/captcha', captcha)
+app.use('/api/articles/*', async (c) => {
+  const drizzle = createDb(c.env.DB)
+  const router = createArticleRoutes(c.env, drizzle)
+  return router.fetch(c.req.raw, c.env)
+})
+
+app.use('/api/comments/*', async (c) => {
+  const router = createCommentRoutes(c.env)
+  return router.fetch(c.req.raw, c.env)
+})
+
+// 健康检查
+app.get('/health', (c) => c.json({ status: 'ok' }))
 
 // 404 处理
-app.notFound((c) => {
-  return c.json({
-    success: false,
-    message: '请求的资源不存在',
-    code: 'NOT_FOUND'
-  }, 404)
+app.notFound((c) => c.json({ error: 'Not Found' }, 404))
+
+// 错误处理
+app.onError((err, c) => {
+  console.error(err)
+  return c.json({ error: 'Internal Server Error' }, 500)
 })
 
-// 导出应用
 export default app 

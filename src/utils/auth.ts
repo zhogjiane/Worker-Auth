@@ -1,11 +1,12 @@
 import * as jose from 'jose'
-import { Env } from '../types/env'
+import { User, TokenPayload, UserRoleEnum } from '../types/auth'
+import { Context } from 'hono'
 
 /**
  * 生成随机盐值
  * @returns 16字节的随机盐值
  */
-async function generateSalt(): Promise<string> {
+export async function generateSalt(): Promise<string> {
   const array = new Uint8Array(16)
   crypto.getRandomValues(array)
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
@@ -86,51 +87,106 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 
 /**
  * 生成访问令牌
- * @param userId 用户ID
- * @param env 环境变量
+ * @param user 用户信息
+ * @param secret JWT密钥
  * @returns 访问令牌
  */
-export async function generateAccessToken(userId: number, env: Env): Promise<string> {
-  const secret = new TextEncoder().encode(env.JWT_SECRET)
+export async function generateAccessToken(user: User, secret: string): Promise<string> {
+  const secretKey = new TextEncoder().encode(secret)
   const alg = 'HS256'
 
-  return new jose.SignJWT({ userId })
+  const payload: TokenPayload = {
+    sub: user.id.toString(),
+    email: user.email,
+    role: user.role || UserRoleEnum.USER
+  }
+
+  return new jose.SignJWT(payload)
     .setProtectedHeader({ alg })
     .setIssuedAt()
     .setExpirationTime('1h')
-    .sign(secret)
+    .sign(secretKey)
 }
 
 /**
  * 生成刷新令牌
- * @param userId 用户ID
- * @param env 环境变量
+ * @param user 用户信息
+ * @param secret JWT密钥
  * @returns 刷新令牌
  */
-export async function generateRefreshToken(userId: number, env: Env): Promise<string> {
-  const secret = new TextEncoder().encode(env.JWT_SECRET)
+export async function generateRefreshToken(user: User, secret: string): Promise<string> {
+  const secretKey = new TextEncoder().encode(secret)
   const alg = 'HS256'
 
-  return new jose.SignJWT({ userId })
+  const payload: TokenPayload = {
+    sub: user.id.toString(),
+    email: user.email,
+    role: user.role || UserRoleEnum.USER
+  }
+
+  return new jose.SignJWT(payload)
     .setProtectedHeader({ alg })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(secret)
+    .sign(secretKey)
 }
 
 /**
  * 验证令牌
  * @param token JWT令牌
- * @param env 环境变量
+ * @param secret JWT密钥
  * @returns 解码后的令牌数据
  */
-export async function verifyToken(token: string, env: Env): Promise<jose.JWTPayload> {
-  const secret = new TextEncoder().encode(env.JWT_SECRET)
-  const { payload } = await jose.jwtVerify(token, secret)
-  return payload
+export async function verifyToken(token: string, secret: string): Promise<TokenPayload> {
+  const secretKey = new TextEncoder().encode(secret)
+  const { payload } = await jose.jwtVerify(token, secretKey)
+  return payload as TokenPayload
 }
 
 // 生成随机验证码
 export function generateCaptcha(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
+}
+
+/**
+ * 从请求头中获取 JWT token
+ */
+function getTokenFromHeader(ctx: Context): string | null {
+  const authHeader = ctx.req.header('Authorization') ?? null
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null
+  }
+  return authHeader.slice(7)
+}
+
+/**
+ * 从请求头中获取用户ID
+ * @param c Hono上下文
+ * @returns 用户ID或null
+ */
+export const getUserIdFromToken = async (c: Context): Promise<number | null> => {
+  const token = await getTokenFromHeader(c)
+  if (!token) return null
+
+  try {
+    const payload = await verifyToken(token, c.env.JWT_SECRET)
+    return payload?.sub ? Number(payload.sub) : null
+  } catch (error) {
+    console.error('获取用户ID失败:', error)
+    return null
+  }
+}
+
+/**
+ * 认证中间件
+ */
+export async function authMiddleware(ctx: Context, next: () => Promise<void>): Promise<Response | void> {
+  try {
+    const userId = await getUserIdFromToken(ctx)
+    ctx.set('userId', userId)
+    return next()
+  } catch (error) {
+    ctx.status(401)
+    return ctx.json({ message: '未授权访问' })
+  }
 } 

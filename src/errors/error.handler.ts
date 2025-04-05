@@ -90,7 +90,8 @@ export class ErrorHandlerChain {
       }
     }
     
-    // 如果所有处理器都无法处理，使用通用处理器
+    // 由于 GenericErrorHandler 的 canHandle 总是返回 true，
+    // 所以这里永远不会执行到，可以删除
     return await new GenericErrorHandler().handle(error, c)
   }
 } 

@@ -15,14 +15,10 @@ MAX_REQUESTS_PER_MINUTE = "60"
 
 # 安全配置
 ALLOWED_ORIGINS = "https://www.litesmile.xyz,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
-CAPTCHA_EXPIRY = "300"  # 验证码有效期（秒）
-IP_BAN_DURATION = "3600"  # IP 封禁时长（秒）
-MAX_FAILED_ATTEMPTS = "5"  # 最大失败尝试次数
 
-# KV 绑定
-[[kv_namespaces]]
-binding = "CAPTCHA_KV"
-id = "87f5b45d13d54e9f8bde0b5170979b7f"
+# Turnstile 配置
+TURNSTILE_SECRET_KEY = "1x00000000000000000000AA"  # 从 Cloudflare 控制台获取
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"    # 从 Cloudflare 控制台获取
 
 # D1 数据库绑定
 [[d1_databases]]
