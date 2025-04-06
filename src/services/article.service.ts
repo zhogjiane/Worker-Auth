@@ -6,11 +6,16 @@ import { articles, users } from '../db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 
 export class ArticleService {
-  // 使用 any 类型暂时解决类型问题
+  // 使用 any 类型暂时解决类型问题，后续可以改进为更精确的类型
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getArticleStmt: any | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getArticlesStmt: any | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getArticlesCountStmt: any | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getArticlesByStatusStmt: any | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getArticlesCountByStatusStmt: any | null = null
 
   constructor(
@@ -31,8 +36,12 @@ export class ArticleService {
           status: articles.status,
           createdAt: articles.createdAt,
           updatedAt: articles.updatedAt,
+          authorId: articles.authorId,
           authorName: users.username,
-          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`
+          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`,
+          isActive: sql<boolean>`1`,
+          publishedAt: articles.publishedAt,
+          isPremium: articles.isPremium
         })
         .from(articles)
         .leftJoin(users, eq(articles.authorId, users.id))
@@ -55,8 +64,12 @@ export class ArticleService {
           status: articles.status,
           createdAt: articles.createdAt,
           updatedAt: articles.updatedAt,
+          authorId: articles.authorId,
           authorName: users.username,
-          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`
+          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`,
+          isActive: sql<boolean>`1`,
+          publishedAt: articles.publishedAt,
+          isPremium: articles.isPremium
         })
         .from(articles)
         .leftJoin(users, eq(articles.authorId, users.id))
@@ -96,8 +109,12 @@ export class ArticleService {
           status: articles.status,
           createdAt: articles.createdAt,
           updatedAt: articles.updatedAt,
+          authorId: articles.authorId,
           authorName: users.username,
-          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`
+          commentCount: sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.article_id = articles.id AND c.status = 'APPROVED')`,
+          isActive: sql<boolean>`1`,
+          publishedAt: articles.publishedAt,
+          isPremium: articles.isPremium
         })
         .from(articles)
         .leftJoin(users, eq(articles.authorId, users.id))
@@ -134,7 +151,8 @@ export class ArticleService {
   async getArticles(page: number = 1, pageSize: number = 10, status?: ArticleStatus) {
     const offset = (page - 1) * pageSize
     
-    let articleList: typeof articles.$inferSelect[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let articleList: any[]
     let total: number
     
     if (status) {
@@ -144,7 +162,7 @@ export class ArticleService {
         status,
         limit: pageSize,
         offset
-      }) as typeof articles.$inferSelect[]
+      })
       
       const countStmt = this.initGetArticlesCountByStatusStmt()
       const totalResult = await countStmt.execute({ status }) as { count: number }[]
@@ -155,7 +173,7 @@ export class ArticleService {
       articleList = await stmt.execute({
         limit: pageSize,
         offset
-      }) as typeof articles.$inferSelect[]
+      })
       
       const countStmt = this.initGetArticlesCountStmt()
       const totalResult = await countStmt.execute({}) as { count: number }[]
@@ -167,8 +185,9 @@ export class ArticleService {
         ...article,
         createdAt: new Date(Number(article.createdAt)),
         updatedAt: new Date(Number(article.updatedAt)),
+        publishedAt: article.publishedAt ? new Date(Number(article.publishedAt)) : null,
         viewCount: 0, // 默认值，因为数据库中没有这个字段
-        authorId: 0 // 默认值，因为查询中没有选择这个字段
+        isActive: Boolean(article.isActive)
       })) as Article[],
       total
     }
@@ -181,7 +200,7 @@ export class ArticleService {
    */
   async getArticle(id: number): Promise<Article | null> {
     const stmt = this.initGetArticleStmt()
-    const result = await stmt.execute({ id }) as typeof articles.$inferSelect[]
+    const result = await stmt.execute({ id })
 
     if (!result[0]) return null
 
@@ -189,8 +208,9 @@ export class ArticleService {
       ...result[0],
       createdAt: new Date(Number(result[0].createdAt)),
       updatedAt: new Date(Number(result[0].updatedAt)),
+      publishedAt: result[0].publishedAt ? new Date(Number(result[0].publishedAt)) : null,
       viewCount: 0, // 默认值，因为数据库中没有这个字段
-      authorId: 0 // 默认值，因为查询中没有选择这个字段
+      isActive: Boolean(result[0].isActive)
     } as Article
   }
 
@@ -207,7 +227,8 @@ export class ArticleService {
         title: input.title,
         content: input.content,
         authorId: userId,
-        status: 'DRAFT'
+        status: 'DRAFT',
+        isPremium: input.isPremium || false
       })
       .returning()
 
@@ -229,6 +250,7 @@ export class ArticleService {
     if (input.title) updateData.title = input.title
     if (input.content) updateData.content = input.content
     if (input.status) updateData.status = input.status
+    if (input.isPremium !== undefined) updateData.isPremium = input.isPremium
 
     if (Object.keys(updateData).length === 1) {
       throw new Error('没有要更新的字段')

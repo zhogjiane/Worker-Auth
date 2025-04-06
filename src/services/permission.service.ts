@@ -4,7 +4,7 @@ import { BusinessError, NotFoundError, ValidationError } from '../errors/error.t
 import type { DrizzleD1Database } from 'drizzle-orm/d1'
 import type { DbSchema } from '../db'
 import { permissions } from '../db/schema'
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 /**
  * 权限服务类

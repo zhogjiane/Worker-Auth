@@ -57,6 +57,7 @@ export const articles = sqliteTable('articles', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   status: text('status').notNull().default('DRAFT'),
+  isPremium: integer('is_premium', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -156,6 +157,8 @@ export type DbSchema = {
   userRoles: typeof userRoles
   rolePermissions: typeof rolePermissions
   comments: typeof comments
+  commentVotes: typeof commentVotes
+  commentReports: typeof commentReports
 }
 
 // 获取数据库 schema
@@ -166,6 +169,8 @@ export function getDbSchema(): DbSchema {
     permissions,
     userRoles,
     rolePermissions,
-    comments
+    comments,
+    commentVotes,
+    commentReports
   }
 } 

@@ -9,7 +9,7 @@
     "deploy": "wrangler deploy",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:generate": "drizzle-kit generate:sqlite",
-    "db:push": "wrangler d1 execute worker-auth-db --local --file=./migrations/0000_yielding_lizard.sql",
+    "db:push": "wrangler d1 execute worker-auth-db --local --file=./migrations/0000_init.sql",
     "db:studio": "drizzle-kit studio --port 3333"
   },
   "keywords": [
